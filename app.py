@@ -58,7 +58,10 @@ def load_all():
         return model, tokenizer, label_encoder, clf
 
 model, tokenizer, label_encoder, clf = load_all()
-
+# After load_all()
+st.write("Label encoder classes:", label_encoder.classes_.tolist())
+st.write("Model num_labels:", model.config.num_labels)
+st.write("Model id2label:", model.config.id2label)
 # ── Predict Function for SHAP ─────────────────────────────────────────────────
 def predict_proba(texts):
     clean_texts = [
