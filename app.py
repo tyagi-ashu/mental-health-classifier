@@ -34,10 +34,9 @@ def load_all():
     HF_REPO = "tyagi-ashu/mental-health-classifier"
 
     with st.spinner("Loading model from Hugging Face..."):
-        model = AutoModelForSequenceClassification.from_pretrained(HF_REPO)
+        model     = AutoModelForSequenceClassification.from_pretrained(HF_REPO)
         tokenizer = AutoTokenizer.from_pretrained(HF_REPO)
 
-        # Download label encoder
         label_encoder_path = hf_hub_download(
             repo_id=HF_REPO,
             filename="label_encoder.pkl"
@@ -52,10 +51,10 @@ def load_all():
             model=model,
             tokenizer=tokenizer,
             device=-1,
-            top_k=None        # ← replaces return_all_scores=True
+            top_k=None
         )
 
-        return model, tokenizer, label_encoder, clf
+    return model, tokenizer, label_encoder, clf
 
 model, tokenizer, label_encoder, clf = load_all()
 
@@ -69,17 +68,17 @@ def predict_proba(texts):
     result = []
     for o in outputs:
         if isinstance(o, list):
-            result.append([d['score'] for d in o])
+            # Sort by label index to ensure correct order
+            o_sorted = sorted(o, key=lambda x: int(x['label'].split('_')[-1]))
+            result.append([d['score'] for d in o_sorted])
         elif isinstance(o, dict):
             result.append([o['score']])
-        else:
-            result.append(o)
     return np.array(result)
 
 # ── Single Text Prediction ────────────────────────────────────────────────────
 def detect_class(text):
     cleaned = clean_statement(text)
-    inputs = tokenizer(
+    inputs  = tokenizer(
         cleaned,
         return_tensors="pt",
         padding=True,
@@ -88,7 +87,9 @@ def detect_class(text):
     )
     with torch.no_grad():
         outputs = model(**inputs)
-    return torch.argmax(outputs.logits, dim=1).item()
+    predicted_idx   = torch.argmax(outputs.logits, dim=1).item()
+    predicted_label = model.config.id2label[predicted_idx]  # uses fixed config
+    return predicted_idx, predicted_label
 
 # ── UI ────────────────────────────────────────────────────────────────────────
 user_input = st.text_area(
@@ -103,9 +104,8 @@ if st.button("Analyze"):
     else:
         # ── Prediction ────────────────────────────────────────────────────────
         with st.spinner("Predicting..."):
-            predicted_idx = detect_class(user_input)
-            predicted_label = label_encoder.inverse_transform([predicted_idx])[0]
-            probs = predict_proba([user_input])[0]
+            predicted_idx, predicted_label = detect_class(user_input)
+            probs      = predict_proba([user_input])[0]
             confidence = probs[predicted_idx] * 100
 
         # ── Show Result ───────────────────────────────────────────────────────
@@ -115,7 +115,7 @@ if st.button("Analyze"):
         # ── Probability Chart ─────────────────────────────────────────────────
         st.markdown("### 📊 Class Probabilities")
         prob_dict = {
-            label_encoder.classes_[i]: float(probs[i])
+            model.config.id2label[i]: float(probs[i])
             for i in range(len(probs))
         }
         st.bar_chart(prob_dict)
@@ -126,8 +126,8 @@ if st.button("Analyze"):
 
         with st.spinner("Generating SHAP explanation (this may take a minute)..."):
             try:
-                masker = shap.maskers.Text(tokenizer)
-                explainer = shap.Explainer(predict_proba, masker, algorithm="partition")
+                masker      = shap.maskers.Text(tokenizer)
+                explainer   = shap.Explainer(predict_proba, masker, algorithm="partition")
                 shap_values = explainer([user_input])
 
                 fig, ax = plt.subplots()
