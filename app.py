@@ -66,7 +66,16 @@ def predict_proba(texts):
         for t in texts
     ]
     outputs = clf(clean_texts)
-    return np.array([[d['score'] for d in o] for o in outputs])
+    st.write(outputs)  # ← temporary debug, remove after fixing
+    result = []
+    for o in outputs:
+        if isinstance(o, list):
+            result.append([d['score'] for d in o])
+        elif isinstance(o, dict):
+            result.append([o['score']])
+        else:
+            result.append(o)
+    return np.array(result)
 
 # ── Single Text Prediction ────────────────────────────────────────────────────
 def detect_class(text):
