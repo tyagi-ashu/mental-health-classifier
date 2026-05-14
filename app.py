@@ -52,10 +52,10 @@ def load_all():
             model=model,
             tokenizer=tokenizer,
             device=-1,
-            return_all_scores=True
+            top_k=None        # ← replaces return_all_scores=True
         )
 
-    return model, tokenizer, label_encoder, clf
+        return model, tokenizer, label_encoder, clf
 
 model, tokenizer, label_encoder, clf = load_all()
 
@@ -66,7 +66,6 @@ def predict_proba(texts):
         for t in texts
     ]
     outputs = clf(clean_texts)
-    st.write(outputs)  # ← temporary debug, remove after fixing
     result = []
     for o in outputs:
         if isinstance(o, list):
