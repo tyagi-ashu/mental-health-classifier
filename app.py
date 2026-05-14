@@ -119,17 +119,50 @@ if st.button("Analyze"):
         st.bar_chart(prob_dict)
 
         # ── SHAP Explanation ──────────────────────────────────────────────────
+
         st.markdown("### 💡 SHAP Explanation")
         st.caption("🔴 Red words push toward this prediction · 🔵 Blue words push away")
 
         with st.spinner("Generating SHAP explanation (this may take a minute)..."):
             try:
-                masker      = shap.maskers.Text(tokenizer)
-                explainer   = shap.Explainer(predict_proba, masker, algorithm="partition")
-                shap_values = explainer([user_input])
+                def predict_proba_shap(texts):
+                    if isinstance(texts, np.ndarray):
+                        texts = texts.tolist()
+                    clean_texts = [
+                        " ".join(t) if isinstance(t, (list, tuple)) else str(t)
+                        for t in texts
+                    ]
+                    inputs = tokenizer(
+                        clean_texts,
+                        return_tensors="pt",
+                        truncation=True,
+                        padding=True,
+                        max_length=512
+                    )
+                    with torch.no_grad():
+                        outputs = model(**inputs)
+                    return torch.softmax(outputs.logits, dim=1).cpu().numpy()
 
-                fig, ax = plt.subplots()
-                shap.plots.text(shap_values[0, :, predicted_idx], display=False)
+                masker      = shap.maskers.Text(tokenizer)
+                explainer   = shap.Explainer(predict_proba_shap, masker, algorithm="partition")
+                shap_values = explainer([clean_statement(user_input)])
+
+                # Get word-level SHAP values for predicted class
+                words       = clean_statement(user_input).split()
+                shap_vals   = shap_values.values[0, :, predicted_idx]
+
+                # Trim to match word count
+                shap_vals = shap_vals[:len(words)]
+
+                # Plot as horizontal bar chart
+                fig, ax = plt.subplots(figsize=(10, max(3, len(words) * 0.4)))
+                colors = ['#ff4b4b' if v > 0 else '#4b9eff' for v in shap_vals]
+                ax.barh(words, shap_vals, color=colors)
+                ax.axvline(x=0, color='black', linewidth=0.8)
+                ax.set_xlabel("SHAP Value")
+                ax.set_title(f"Word Contributions → {predicted_label}")
+                ax.invert_yaxis()
+                plt.tight_layout()
                 st.pyplot(fig)
                 plt.close()
 
