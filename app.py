@@ -68,14 +68,11 @@ def predict_proba(texts):
     result = []
     for o in outputs:
         if isinstance(o, list):
-            # Sort by model's label2id mapping
             o_sorted = sorted(o, key=lambda x: model.config.label2id[x['label']])
             result.append([d['score'] for d in o_sorted])
         elif isinstance(o, dict):
             result.append([o['score']])
-    return np.array(result)'score']])
     return np.array(result)
-
 # ── Single Text Prediction ────────────────────────────────────────────────────
 def detect_class(text):
     cleaned = clean_statement(text)
